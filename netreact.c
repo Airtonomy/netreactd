@@ -1,12 +1,15 @@
 // From https://olegkutkov.me/2018/02/14/monitoring-linux-networking-state-using-netlink/
 
-#include <errno.h>
-#include <stdio.h>
+// C headrs
 #include <memory.h>
-#include <net/if.h>
+#include <stdio.h>
+
+// Linux headers
 #include <arpa/inet.h>
-#include <sys/socket.h>
+#include <errno.h>
 #include <linux/rtnetlink.h>
+#include <net/if.h>
+#include <sys/socket.h>
 
 // little helper to parsing message using netlink macroses
 void parseRtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len)
