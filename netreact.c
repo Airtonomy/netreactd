@@ -10,6 +10,7 @@
 #include <linux/rtnetlink.h>
 #include <net/if.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 // little helper to parsing message using netlink macroses
 void parseRtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len)
