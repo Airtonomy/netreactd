@@ -2,6 +2,7 @@
 
 // C headrs
 #include <memory.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -20,7 +21,7 @@ void sigint_handler(int const sig)
 }
 
 // little helper to parsing message using netlink macroses
-void parseRtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len)
+void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, int len)
 {
     memset(tb, 0, sizeof(struct rtattr *) * (max + 1));
 
@@ -36,14 +37,14 @@ int main()
 {
     signal(SIGINT, sigint_handler);
 
-    int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);   // create netlink socket
+    int const fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);   // create netlink socket
 
     if (fd < 0) {
         printf("Failed to create netlink socket: %s\n", (char*)strerror(errno));
         return 1;
     }
 
-    struct sockaddr_nl  local;  // local addr struct
+    struct sockaddr_nl local;   // local addr struct
     char buf[8192];             // message buffer
     struct iovec iov;           // message structure
     iov.iov_base = buf;         // set message buffer as io
@@ -52,17 +53,16 @@ int main()
     memset(&local, 0, sizeof(local));
 
     local.nl_family = AF_NETLINK;       // set protocol family
-    local.nl_groups =   RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV4_ROUTE;   // set groups we interested in
+    local.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV4_ROUTE;   // set groups we interested in
     local.nl_pid = getpid();    // set out id using current process id
 
     // initialize protocol message header
-    struct msghdr msg;
-    {
-        msg.msg_name = &local;                  // local address
-        msg.msg_namelen = sizeof(local);        // address size
-        msg.msg_iov = &iov;                     // io vector
-        msg.msg_iovlen = 1;                     // io size
-    }
+    struct msghdr msg = {
+        .msg_name = &local,                  // local address
+        .msg_namelen = sizeof(local),        // address size
+        .msg_iov = &iov,                     // io vector
+        .msg_iovlen = 1,                     // io size
+    };
 
     if (bind(fd, (struct sockaddr*)&local, sizeof(local)) < 0) {     // bind socket
         printf("Failed to bind netlink socket: %s\n", (char*)strerror(errno));
@@ -71,7 +71,7 @@ int main()
     }
 
     // read and parse all messages from the
-    while (1) {
+    while (true) {
         ssize_t status = recvmsg(fd, &msg, MSG_DONTWAIT);
 
         //  check status
@@ -92,12 +92,12 @@ int main()
         }
 
         // message parser
-        struct nlmsghdr *h;
+        struct nlmsghdr const *h;
 
-        for (h = (struct nlmsghdr*)buf; status >= (ssize_t)sizeof(*h); ) {   // read all messagess headers
-            int len = h->nlmsg_len;
-            int l = len - sizeof(*h);
-            char *ifName;
+        for (h = (struct nlmsghdr const*)buf; status >= (ssize_t)sizeof(*h); ) {   // read all messagess headers
+            int const len = h->nlmsg_len;
+            int const l = len - sizeof(*h);
+            char const *ifName;
 
             if ((l < 0) || (len > status)) {
                 printf("Invalid message length: %i\n", len);
@@ -108,36 +108,30 @@ int main()
             if ((h->nlmsg_type == RTM_NEWROUTE) || (h->nlmsg_type == RTM_DELROUTE)) { // some changes in routing table
                 printf("Routing table was changed\n");
             } else {    // in other case we need to go deeper
-                char *ifUpp;
-                char *ifRunn;
-                struct ifinfomsg *ifi;  // structure for network interface info
+                 // structure for network interface info
+                struct ifinfomsg const *const ifi = (struct ifinfomsg const *const)NLMSG_DATA(h);    // get information about changed network interface
+
                 struct rtattr *tb[IFLA_MAX + 1];
-
-                ifi = (struct ifinfomsg*) NLMSG_DATA(h);    // get information about changed network interface
-
                 parseRtattr(tb, IFLA_MAX, IFLA_RTA(ifi), h->nlmsg_len);  // get attributes
 
                 if (tb[IFLA_IFNAME]) {  // validation
-                    ifName = (char*)RTA_DATA(tb[IFLA_IFNAME]); // get network interface name
+                    ifName = (char const*)RTA_DATA(tb[IFLA_IFNAME]); // get network interface name
                 }
 
-                if (ifi->ifi_flags & IFF_UP) { // get UP flag of the network interface
-                    ifUpp = (char*)"UP";
-                } else {
-                    ifUpp = (char*)"DOWN";
-                }
+                char const *const ifUpp = (ifi->ifi_flags & IFF_UP) // get UP flag of the network interface
+                    ? "UP"
+                    : "DOWN";
 
-                if (ifi->ifi_flags & IFF_RUNNING) { // get RUNNING flag of the network interface
-                    ifRunn = (char*)"RUNNING";
-                } else {
-                    ifRunn = (char*)"NOT RUNNING";
-                }
+                char const *const ifRunn = (ifi->ifi_flags & IFF_RUNNING) // get RUNNING flag of the network interface
+                    ? "RUNNING"
+                    : "NOT RUNNING";
 
                 char ifAddress[256];    // network addr
-                struct ifaddrmsg *ifa; // structure for network interface data
+                struct ifaddrmsg const *ifa; // structure for network interface data
                 struct rtattr *tba[IFA_MAX+1];
 
-                ifa = (struct ifaddrmsg*)NLMSG_DATA(h); // get data from the network interface
+                // structure for network interface data
+                struct ifaddrmsg const *const ifa = (struct ifaddrmsg const *const)NLMSG_DATA(h); // get data from the network interface
 
                 parseRtattr(tba, IFA_MAX, IFA_RTA(ifa), h->nlmsg_len);
 
@@ -145,7 +139,7 @@ int main()
                     inet_ntop(AF_INET, RTA_DATA(tba[IFA_LOCAL]), ifAddress, sizeof(ifAddress)); // get IP addr
                 }
 
-                switch (h->nlmsg_type) { // what is actually happenned?
+                switch (h->nlmsg_type) { // what actually happened?
                     case RTM_DELADDR:
                         printf("Interface %s: address was removed\n", ifName);
                         break;
@@ -166,7 +160,7 @@ int main()
 
             status -= NLMSG_ALIGN(len); // align offsets by the message length, this is important
 
-            h = (struct nlmsghdr*)((char*)h + NLMSG_ALIGN(len));    // get next message
+            h = (struct nlmsghdr const*)((char*)h + NLMSG_ALIGN(len));    // get next message
         }
 
         usleep(250000); // sleep for a while
