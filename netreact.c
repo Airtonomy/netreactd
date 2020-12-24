@@ -3,14 +3,21 @@
 // C headrs
 #include <memory.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 // Linux headers
 #include <arpa/inet.h>
 #include <errno.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+void sigint_handler(int const sig)
+{
+    exit(0);
+}
 
 // little helper to parsing message using netlink macroses
 void parseRtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len)
@@ -27,6 +34,8 @@ void parseRtattr(struct rtattr *tb[], int max, struct rtattr *rta, int len)
 
 int main()
 {
+    signal(SIGINT, sigint_handler);
+
     int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);   // create netlink socket
 
     if (fd < 0) {
