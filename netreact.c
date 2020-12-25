@@ -11,17 +11,49 @@
 #include <errno.h>
 #include <linux/rtnetlink.h>
 #include <net/if.h>
+#include <pthread.h>
 #include <signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-void sigint_handler(int const sig)
-{
-    exit(0);
+typedef struct {
+    size_t timeoutSeconds;
+    const char *script;
+    bool volatile *running;
+} config_t;
+
+static bool strIsEmpty(char const *const str) {
+    return str == NULL || strlen(str) == 0;
+}
+
+static void *scriptThread(/*char const *const*/ void *script_) {
+    char const *const script = (char const *const)script_;
+    if (!strIsEmpty(script_)) {
+        printf("Running script: %s\n", script);
+        int const returnCode = system(script);
+        printf("Script finished with code %d\n", returnCode);
+    }
+    return NULL;
+}
+
+static void *timeoutThread(/*config_t const *const*/ void *config_) {
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+    config_t const *const config = (config_t const *const)config_;
+
+    printf("Waiting %lds\n", config->timeoutSeconds);
+    usleep(config->timeoutSeconds * 1000000);
+
+    pthread_t threadId;
+    pthread_create(&threadId, NULL, scriptThread, (void*)config->script);
+
+    *config->running = false;
+    return NULL;
 }
 
 // little helper to parsing message using netlink macroses
-void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, int len)
+static void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, int len)
 {
     memset(tb, 0, sizeof(struct rtattr *) * (max + 1));
 
@@ -33,9 +65,15 @@ void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, int len
     }
 }
 
-int main()
-{
-    signal(SIGINT, sigint_handler);
+static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const script) {
+    bool volatile threadActive = false;
+    config_t const threadConfig = {
+        .timeoutSeconds = timeoutSeconds,
+        .script = script,
+        .running = &threadActive,
+    };
+    pthread_t threadId;
+    memset(&threadId, 0, sizeof(threadId));
 
     int const fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);   // create netlink socket
 
@@ -97,7 +135,7 @@ int main()
         for (h = (struct nlmsghdr const*)buf; status >= (ssize_t)sizeof(*h); ) {   // read all messagess headers
             int const len = h->nlmsg_len;
             int const l = len - sizeof(*h);
-            char const *ifName;
+            char const *ifName = NULL;
 
             if ((l < 0) || (len > status)) {
                 printf("Invalid message length: %i\n", len);
@@ -118,16 +156,17 @@ int main()
                     ifName = (char const*)RTA_DATA(tb[IFLA_IFNAME]); // get network interface name
                 }
 
-                char const *const ifUpp = (ifi->ifi_flags & IFF_UP) // get UP flag of the network interface
+                bool const isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
+                char const *const ifUpp = isUp
                     ? "UP"
                     : "DOWN";
 
-                char const *const ifRunn = (ifi->ifi_flags & IFF_RUNNING) // get RUNNING flag of the network interface
+                bool const isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
+                char const *const ifRunn = isRunning
                     ? "RUNNING"
                     : "NOT RUNNING";
 
                 char ifAddress[256];    // network addr
-                struct ifaddrmsg const *ifa; // structure for network interface data
                 struct rtattr *tba[IFA_MAX+1];
 
                 // structure for network interface data
@@ -150,10 +189,23 @@ int main()
 
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
+                        if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
+                            pthread_create(&threadId, NULL, timeoutThread, (void*)&threadConfig);
+                            threadActive = true;
+                        } else if (threadActive && (!isUp || !isRunning) && strcmp(ifName, ifTarget) == 0) {
+                            printf("Target interface went down while thread was running\n");
+                            pthread_cancel(threadId);
+                            threadActive = false;
+                        }
                         break;
 
                     case RTM_NEWADDR:
                         printf("Interface %s: new address was assigned: %s\n", ifName, ifAddress);
+                        if (threadActive && strcmp(ifName, ifTarget) == 0) {
+                            printf("Canceling timeout\n");
+                            pthread_cancel(threadId);
+                            threadActive = false;
+                        }
                         break;
                 }
             }
@@ -169,4 +221,27 @@ int main()
     close(fd);  // close socket
 
     return 0;
+}
+
+static void sigintHandler(int const sig)
+{
+    exit(0);
+}
+
+int main() {
+    signal(SIGINT, sigintHandler);
+
+    char const* const timeoutStr = getenv("NETREACT_TIMEOUT");
+    int const timeout = timeoutStr == NULL || strlen(timeoutStr) == 0
+        ? 1
+        : atoi(timeoutStr);
+    char const* const script = getenv("NETREACT_SCRIPT");
+    char const* const targetIf = getenv("NETREACT_IF");
+    if (strIsEmpty(script) || strIsEmpty(targetIf)) {
+        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 NETREACT_SCRIPT=./do_something.sh netreact\n");
+        return 1;
+    }
+
+    printf("Watching interface %s with a timeout of %ds and script: %s\n", targetIf, timeout, script);
+    return main_loop(targetIf, timeout, script);
 }

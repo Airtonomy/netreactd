@@ -3,7 +3,7 @@ OUT := $(BUILD_DIR)/netreact
 CFLAGS := -O -Wall
 CC := gcc
 LDFLAGS :=
-LDLIBS :=
+LDLIBS := -lpthread
 
 CFILES := $(wildcard **.c)
 OBJFILES := $(foreach file,$(CFILES),$(BUILD_DIR)/$(file:.c=.o))
