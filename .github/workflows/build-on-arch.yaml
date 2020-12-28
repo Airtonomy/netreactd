@@ -1,0 +1,52 @@
+on: [push]
+
+jobs:
+  aarch64_job:
+    runs-on: ubuntu-18.04
+    name: Build on ubuntu-18.04 aarch64
+    steps:
+      - uses: actions/checkout@v2.1.0
+      - uses: uraimo/run-on-arch-action@v2.0.8
+        name: Build
+        with:
+          arch: aarch64
+          distro: ubuntu18.04
+
+          # Not required, but speeds up builds by storing container images in
+          # a GitHub package registry.
+          githubToken: ${{ github.token }}
+
+          setup: |
+            mkdir -p "${PWD}/artifacts"
+
+          dockerRunArgs: |
+            --volume "${PWD}/artifacts:/artifacts"
+
+          # Set an output parameter `uname` for use in subsequent steps
+          run: |
+            uname -a
+            apt-get update && apt-get install -y gcc make zip && rm -rf /var/lib/apt/lists/*
+            make install EXEC_PREFIX=out OUTNAME="netreactd-aarch64-fhs"
+            (cd out/bin && zip -o /artifacts/netreactd-aarch64-fhs.zip *)
+      - name: Create Release
+        if: success() && github.ref == 'refs/heads/main'
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: build-${{ github.sha }}
+          release_name: Release ${{ github.sha }}
+          draft: false
+          prerelease: false
+      - name: Upload Release Asset
+        if: success() && github.ref == 'refs/heads/main'
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          asset_path: artifacts/netreactd-aarch64-fhs.zip
+          asset_name: aarch64-fhs.zip
+          asset_content_type: application/zip

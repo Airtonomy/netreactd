@@ -1,5 +1,6 @@
 BUILD_DIR := _build
-OUT := $(BUILD_DIR)/netreactd
+OUTNAME ?= netreactd
+OUT := $(BUILD_DIR)/$(OUTNAME)
 CFLAGS := -O -Wall
 CC := gcc
 LDFLAGS :=
@@ -25,7 +26,7 @@ install: $(OUT) $(BINDIR)
 
 .PHONY: uninstall
 uninstall:
-	rm -f "$(BINDIR)/$(notdir $(OUT))"
+	rm -f "$(BINDIR)/$(OUTNAME)"
 
 .PHONY: clean
 clean:
