@@ -65,11 +65,11 @@ static void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, 
     }
 }
 
-static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const script) {
+static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const upScript, char const *const downScript) {
     bool volatile threadActive = false;
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
-        .script = script,
+        .script = upScript,
         .running = &threadActive,
     };
     pthread_t threadId;
@@ -178,6 +178,7 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                     inet_ntop(AF_INET, RTA_DATA(tba[IFA_LOCAL]), ifAddress, sizeof(ifAddress)); // get IP addr
                 }
 
+                bool isDown = false;
                 switch (h->nlmsg_type) { // what actually happened?
                     case RTM_DELADDR:
                         printf("Interface %s: address was removed\n", ifName);
@@ -185,18 +186,21 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_DELLINK:
                         printf("Network interface %s was removed\n", ifName);
+                        isDown = true;
                         break;
 
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
+                        isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
                             pthread_create(&threadId, NULL, timeoutThread, (void*)&threadConfig);
                             threadActive = true;
-                        } else if (threadActive && (!isUp || !isRunning) && strcmp(ifName, ifTarget) == 0) {
+                        } else if (threadActive && isDown && strcmp(ifName, ifTarget) == 0) {
                             printf("Target interface went down while thread was running\n");
                             pthread_cancel(threadId);
                             threadActive = false;
                         }
+
                         break;
 
                     case RTM_NEWADDR:
@@ -207,6 +211,11 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                             threadActive = false;
                         }
                         break;
+                }
+
+                if (isDown && strcmp(ifName, ifTarget) == 0 && !strIsEmpty(downScript)) {
+                    printf("Running down script\n");
+                    pthread_create(&threadId, NULL, scriptThread, (void*)downScript);
                 }
             }
 
@@ -235,13 +244,14 @@ int main() {
     int const timeout = timeoutStr == NULL || strlen(timeoutStr) == 0
         ? 1
         : atoi(timeoutStr);
-    char const* const script = getenv("NETREACT_SCRIPT");
+    char const* const upScript = getenv("NETREACT_UP_SCRIPT");
+    char const* const downScript = getenv("NETREACT_DOWN_SCRIPT");
     char const* const targetIf = getenv("NETREACT_IF");
-    if (strIsEmpty(script) || strIsEmpty(targetIf)) {
-        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 NETREACT_SCRIPT=./do_something.sh netreact\n");
+    if (strIsEmpty(upScript) || strIsEmpty(targetIf)) {
+        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 NETREACT_UP_SCRIPT=./do_something.sh [NETREACT_DOWN_SCRIPT=./do_something.sh] command\n");
         return 1;
     }
 
-    printf("Watching interface %s with a timeout of %ds and script: %s\n", targetIf, timeout, script);
-    return main_loop(targetIf, timeout, script);
+    printf("Watching interface %s with a timeout of %ds\n", targetIf, timeout);
+    return main_loop(targetIf, timeout, upScript, downScript);
 }
