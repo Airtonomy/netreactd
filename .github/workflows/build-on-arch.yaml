@@ -25,9 +25,9 @@ jobs:
           # Set an output parameter `uname` for use in subsequent steps
           run: |
             uname -a
-            apt-get update && apt-get install -y gcc make zip && rm -rf /var/lib/apt/lists/*
+            apt-get update && apt-get install -y gcc make && rm -rf /var/lib/apt/lists/*
             make install EXEC_PREFIX=out OUTNAME="netreactd-aarch64-fhs"
-            (cd out/bin && zip -o /artifacts/netreactd-aarch64-fhs.zip *)
+            gzip -c out/bin/netreactd-aarch64-fhs > /artifacts/netreactd-aarch64-fhs.gz
       - name: Create Release
         if: success() && github.ref == 'refs/heads/main'
         id: create_release
@@ -47,6 +47,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
-          asset_path: artifacts/netreactd-aarch64-fhs.zip
-          asset_name: aarch64-fhs.zip
-          asset_content_type: application/zip
+          asset_path: artifacts/netreactd-aarch64-fhs.gz
+          asset_name: aarch64-fhs.gz
+          asset_content_type: application/gzip
