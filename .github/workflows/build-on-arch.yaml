@@ -1,13 +1,27 @@
-on: [push]
+on: [push, pull_request]
 
 jobs:
-  aarch64_job:
+  build_and_release:
     runs-on: ubuntu-18.04
-    name: Build on ubuntu-18.04 aarch64
+    name: Build and upload
     steps:
       - uses: actions/checkout@v2.1.0
-      - uses: uraimo/run-on-arch-action@v2.0.8
-        name: Build
+        name: Checkout
+
+      - name: Setup
+        run: |
+          mkdir -p artifacts
+
+      - name: Build on x86_64 (Ubuntu 18.04)
+        run: |
+          uname -a
+          sudo apt-get update && sudo apt-get install -y gcc make
+          make install EXEC_PREFIX=out OUTNAME="netreactd-x86_64-fhs" BUILD_DIR=_build-x86_64
+          gzip -c out/bin/netreactd-x86_64-fhs > artifacts/netreactd-x86_64-fhs.gz
+
+      - name: Build on aarch64 (Ubuntu 18.04)
+        if: success()
+        uses: uraimo/run-on-arch-action@v2.0.8
         with:
           arch: aarch64
           distro: ubuntu18.04
@@ -16,9 +30,6 @@ jobs:
           # a GitHub package registry.
           githubToken: ${{ github.token }}
 
-          setup: |
-            mkdir -p "${PWD}/artifacts"
-
           dockerRunArgs: |
             --volume "${PWD}/artifacts:/artifacts"
 
@@ -26,8 +37,9 @@ jobs:
           run: |
             uname -a
             apt-get update && apt-get install -y gcc make && rm -rf /var/lib/apt/lists/*
-            make install EXEC_PREFIX=out OUTNAME="netreactd-aarch64-fhs"
+            make install EXEC_PREFIX=out OUTNAME="netreactd-aarch64-fhs" BUILD_DIR=_build-aarch64
             gzip -c out/bin/netreactd-aarch64-fhs > /artifacts/netreactd-aarch64-fhs.gz
+
       - name: Create Release
         if: success() && github.ref == 'refs/heads/main'
         id: create_release
@@ -39,14 +51,29 @@ jobs:
           release_name: Release ${{ github.sha }}
           draft: false
           prerelease: false
-      - name: Upload Release Asset
+
+      - name: Upload x86_64 Release Asset
         if: success() && github.ref == 'refs/heads/main'
-        id: upload-release-asset
+        id: upload-release-asset-x86_64
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: artifacts/netreactd-x86_64-fhs.gz
+          asset_name: x86_64-fhs.gz
+          asset_content_type: application/gzip
+
+      - name: Upload aarch64 Release Asset
+        if: success() && github.ref == 'refs/heads/main'
+        id: upload-release-asset-aarch64
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: artifacts/netreactd-aarch64-fhs.gz
           asset_name: aarch64-fhs.gz
           asset_content_type: application/gzip
