@@ -205,7 +205,10 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_NEWADDR:
                         printf("Interface %s: new address was assigned: %s\n", ifName, ifAddress);
-                        if (threadActive && strcmp(ifName, ifTarget) == 0) {
+
+                        // If the string starts with 169. it is a link local and we don't want a
+                        // link local address to be treated as a real IP address
+                        if (threadActive && strcmp(ifName, ifTarget) == 0 && strncmp(ifAddress, "169.", 4) != 0) {
                             printf("Canceling timeout\n");
                             pthread_cancel(threadId);
                             threadActive = false;
