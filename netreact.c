@@ -156,12 +156,12 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                     ifName = (char const*)RTA_DATA(tb[IFLA_IFNAME]); // get network interface name
                 }
 
-                bool isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
+                bool const isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
                 char const *const ifUpp = isUp
                     ? "UP"
                     : "DOWN";
 
-                bool isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
+                bool const isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
                 char const *const ifRunn = isRunning
                     ? "RUNNING"
                     : "NOT RUNNING";
