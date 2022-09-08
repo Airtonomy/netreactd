@@ -191,17 +191,16 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
-                        isDown = !isUp || !isRunning;
-
+                        
                         // newLinkScript
-                        printf("Running new link script\n");
-                        pthread_create(&threadId, NULL, scriptThread, (void*)newLinkScript);
-                        pthread_join(threadId, NULL); // wait for thread to finish
-
-                        // check if up after running newLinkScript
-                        isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
-                        isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
-
+                        if (!strIsEmpty(newLinkScript)) {
+                            printf("Running NEWLINK_SCRIPT script\n");
+                            int const returnCode = system(newLinkScript);
+                            printf("Script finished with code %d\n", returnCode);
+                        if (returnCode == 0) {
+                            break;
+                        }
+                    
                         isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
                             pthread_create(&threadId, NULL, timeoutThread, (void*)&threadConfig);
