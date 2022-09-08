@@ -157,12 +157,12 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                 }
 
                 bool isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
-                char *const ifUpp = isUp
+                char const *const ifUpp = isUp
                     ? "UP"
                     : "DOWN";
 
                 bool isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
-                char *const ifRunn = isRunning
+                char const *const ifRunn = isRunning
                     ? "RUNNING"
                     : "NOT RUNNING";
 
