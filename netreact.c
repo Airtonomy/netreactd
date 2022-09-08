@@ -192,20 +192,22 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
                         
-                        // newLinkScript
-                        if (!strIsEmpty(newLinkScript)) {
-                            printf("Running NEWLINK_SCRIPT script\n");
-                            int const returnCode = system(newLinkScript);
-                            printf("Script finished with code %d\n", returnCode);
-                            if (returnCode == 0) {
-                                break;
-                            }
-                        }
-                    
                         isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
+                            // if there is a newLinkScript run and break on success
+                            if (!strIsEmpty(newLinkScript)) {
+                                printf("Running NEWLINK_SCRIPT script\n");
+                                int const returnCode = system(newLinkScript);
+                                printf("Script finished with code %d\n", returnCode);
+                                if (returnCode == 0) {
+                                    break;
+                                }
+                            }
+                            
+                            // did not break from script
                             pthread_create(&threadId, NULL, timeoutThread, (void*)&threadConfig);
                             threadActive = true;
+                        
                         } else if (threadActive && isDown && strcmp(ifName, ifTarget) == 0) {
                             printf("Target interface went down while thread was running\n");
                             pthread_cancel(threadId);
