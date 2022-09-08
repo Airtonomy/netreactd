@@ -197,8 +197,9 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                             printf("Running NEWLINK_SCRIPT script\n");
                             int const returnCode = system(newLinkScript);
                             printf("Script finished with code %d\n", returnCode);
-                        if (returnCode == 0) {
-                            break;
+                            if (returnCode == 0) {
+                                break;
+                            }
                         }
                     
                         isDown = !isUp || !isRunning;
