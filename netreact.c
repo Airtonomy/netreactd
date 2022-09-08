@@ -65,7 +65,7 @@ static void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, 
     }
 }
 
-static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const upScript, char const *const downScript) {
+static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const newLinkScript, char const *const upScript, char const *const downScript) {
     bool volatile threadActive = false;
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
@@ -156,13 +156,13 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                     ifName = (char const*)RTA_DATA(tb[IFLA_IFNAME]); // get network interface name
                 }
 
-                bool const isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
-                char const *const ifUpp = isUp
+                bool isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
+                char *const ifUpp = isUp
                     ? "UP"
                     : "DOWN";
 
-                bool const isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
-                char const *const ifRunn = isRunning
+                bool isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
+                char *const ifRunn = isRunning
                     ? "RUNNING"
                     : "NOT RUNNING";
 
@@ -192,6 +192,17 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
                         isDown = !isUp || !isRunning;
+
+                        // newLinkScript
+                        printf("Running new link script\n");
+                        pthread_create(&threadId, NULL, scriptThread, (void*)newLinkScript);
+                        pthread_join(threadId, NULL); // wait for thread to finish
+
+                        // check if up after running newLinkScript
+                        isUp = ifi->ifi_flags & IFF_UP; // get UP flag of the network interface
+                        isRunning = ifi->ifi_flags & IFF_RUNNING; // get RUNNING flag of the network interface
+
+                        isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
                             pthread_create(&threadId, NULL, timeoutThread, (void*)&threadConfig);
                             threadActive = true;
@@ -200,7 +211,6 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                             pthread_cancel(threadId);
                             threadActive = false;
                         }
-
                         break;
 
                     case RTM_NEWADDR:
@@ -247,14 +257,15 @@ int main() {
     int const timeout = timeoutStr == NULL || strlen(timeoutStr) == 0
         ? 1
         : atoi(timeoutStr);
+    char const* const newLinkScript = getenv("NEWLINK_SCRIPT");
     char const* const upScript = getenv("NETREACT_UP_SCRIPT");
     char const* const downScript = getenv("NETREACT_DOWN_SCRIPT");
     char const* const targetIf = getenv("NETREACT_IF");
     if (strIsEmpty(upScript) || strIsEmpty(targetIf)) {
-        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 NETREACT_UP_SCRIPT=./do_something.sh [NETREACT_DOWN_SCRIPT=./do_something.sh] command\n");
+        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 [NEWLINK_SCRIPT=./do_something.sh]  NETREACT_UP_SCRIPT=./do_something.sh [NETREACT_DOWN_SCRIPT=./do_something.sh] command\n");
         return 1;
     }
 
     printf("Watching interface %s with a timeout of %ds\n", targetIf, timeout);
-    return main_loop(targetIf, timeout, upScript, downScript);
+    return main_loop(targetIf, timeout, newLinkScript, upScript, downScript);
 }
