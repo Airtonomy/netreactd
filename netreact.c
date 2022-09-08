@@ -200,6 +200,7 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                                 int const returnCode = system(newLinkScript);
                                 printf("Script finished with code %d\n", returnCode);
                                 if (returnCode == 0) {
+                                    usleep(250000);
                                     break;
                                 }
                             }
