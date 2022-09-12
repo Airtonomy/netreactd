@@ -25,6 +25,7 @@ Restart=always
 RestartSec=2s
 Environment=NETREACT_IF=eth0
 Environment=NETREACT_TIMEOUT=4
+Environment=NEWLINK_SCRIPT='/abs/path/to/toNewLinkScript'
 Environment=NETREACT_UP_SCRIPT='/abs/path/to/toUpScript'
 Environment=NETREACT_DOWN_SCRIPT='/abs/path/to/toDownScript'
 ExecStart=/usr/local/bin/netreactd

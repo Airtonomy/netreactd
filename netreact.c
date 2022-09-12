@@ -65,7 +65,7 @@ static void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, 
     }
 }
 
-static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const upScript, char const *const downScript) {
+static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const newLinkScript, char const *const upScript, char const *const downScript) {
     bool volatile threadActive = false;
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
@@ -191,16 +191,29 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
+                        
                         isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
+                            // if there is a newLinkScript run and break on success
+                            if (!strIsEmpty(newLinkScript)) {
+                                printf("Running NEWLINK_SCRIPT script\n");
+                                int const returnCode = system(newLinkScript);
+                                printf("Script finished with code %d\n", returnCode);
+                                if (returnCode == 0) {
+                                    usleep(5000);
+                                    break;
+                                }
+                            }
+                            
+                            // did not break from script
                             pthread_create(&threadId, NULL, timeoutThread, (void*)&threadConfig);
                             threadActive = true;
+                        
                         } else if (threadActive && isDown && strcmp(ifName, ifTarget) == 0) {
                             printf("Target interface went down while thread was running\n");
                             pthread_cancel(threadId);
                             threadActive = false;
                         }
-
                         break;
 
                     case RTM_NEWADDR:
@@ -247,14 +260,15 @@ int main() {
     int const timeout = timeoutStr == NULL || strlen(timeoutStr) == 0
         ? 1
         : atoi(timeoutStr);
+    char const* const newLinkScript = getenv("NEWLINK_SCRIPT");
     char const* const upScript = getenv("NETREACT_UP_SCRIPT");
     char const* const downScript = getenv("NETREACT_DOWN_SCRIPT");
     char const* const targetIf = getenv("NETREACT_IF");
     if (strIsEmpty(upScript) || strIsEmpty(targetIf)) {
-        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 NETREACT_UP_SCRIPT=./do_something.sh [NETREACT_DOWN_SCRIPT=./do_something.sh] command\n");
+        printf("USAGE: NETREACT_IF=eth0 NETREACT_TIMEOUT=3 [NEWLINK_SCRIPT=./do_something.sh]  NETREACT_UP_SCRIPT=./do_something.sh [NETREACT_DOWN_SCRIPT=./do_something.sh] command\n");
         return 1;
     }
 
     printf("Watching interface %s with a timeout of %ds\n", targetIf, timeout);
-    return main_loop(targetIf, timeout, upScript, downScript);
+    return main_loop(targetIf, timeout, newLinkScript, upScript, downScript);
 }
