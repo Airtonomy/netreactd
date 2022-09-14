@@ -65,8 +65,9 @@ static void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, 
     }
 }
 
-static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const newLinkScript, char const *const upScript, char const *const downScript) {
+static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const newLinkScript, char const *const skipFirstNewAddress, char const *const upScript, char const *const downScript) {
     bool volatile threadActive = false;
+    bool skipFirstNewAddressFlag = skipFirstNewAddress == "1"
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
         .script = upScript,
@@ -131,6 +132,8 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
         // message parser
         struct nlmsghdr const *h;
+
+        bool newLinkScriptSuccess = false;
 
         for (h = (struct nlmsghdr const*)buf; status >= (ssize_t)sizeof(*h); ) {   // read all messagess headers
             int const len = h->nlmsg_len;
@@ -200,7 +203,7 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                                 int const returnCode = system(newLinkScript);
                                 printf("Script finished with code %d\n", returnCode);
                                 if (returnCode == 0) {
-                                    usleep(5000);
+                                    newLinkScriptSuccess = true
                                     break;
                                 }
                             }
@@ -218,7 +221,11 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_NEWADDR:
                         printf("Interface %s: new address was assigned: %s\n", ifName, ifAddress);
-
+                        if (skipFirstNewAddressFlag) {
+                            printf("Skipping handling of new address.");
+                            skipFirstNewAddressFlag = false;
+                            break;
+                        }
                         // If the string starts with 169. it is a link local and we don't want a
                         // link local address to be treated as a real IP address
                         if (threadActive && strcmp(ifName, ifTarget) == 0 && strncmp(ifAddress, "169.", 4) != 0) {
@@ -261,6 +268,7 @@ int main() {
         ? 1
         : atoi(timeoutStr);
     char const* const newLinkScript = getenv("NEWLINK_SCRIPT");
+    char const* const skipFirstNewAddress = getenv("SKIP_FIRST_NEW_ADDRESS");
     char const* const upScript = getenv("NETREACT_UP_SCRIPT");
     char const* const downScript = getenv("NETREACT_DOWN_SCRIPT");
     char const* const targetIf = getenv("NETREACT_IF");
@@ -270,5 +278,5 @@ int main() {
     }
 
     printf("Watching interface %s with a timeout of %ds\n", targetIf, timeout);
-    return main_loop(targetIf, timeout, newLinkScript, upScript, downScript);
+    return main_loop(targetIf, timeout, newLinkScript, skipFirstNewAddress,upScript, downScript);
 }
