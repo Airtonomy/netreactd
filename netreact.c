@@ -67,7 +67,7 @@ static void parseRtattr(struct rtattr *tb[], int const max, struct rtattr *rta, 
 
 static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, char const *const newLinkScript, char const *const skipFirstNewAddress, char const *const upScript, char const *const downScript) {
     bool volatile threadActive = false;
-    bool skipFirstNewAddressFlag = skipFirstNewAddress == "1"
+    bool skipFirstNewAddressFlag = skipFirstNewAddress == "1";
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
         .script = upScript,
