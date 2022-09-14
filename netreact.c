@@ -222,7 +222,7 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                     case RTM_NEWADDR:
                         printf("Interface %s: new address was assigned: %s\n", ifName, ifAddress);
                         if (skipFirstNewAddressFlag) {
-                            printf("Skipping handling of new address.");
+                            printf("Skipping handling of new address.\n");
                             skipFirstNewAddressFlag = false;
                             break;
                         }
