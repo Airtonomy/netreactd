@@ -28,6 +28,7 @@ Environment=NETREACT_TIMEOUT=4
 Environment=NEWLINK_SCRIPT='/abs/path/to/toNewLinkScript'
 Environment=NETREACT_UP_SCRIPT='/abs/path/to/toUpScript'
 Environment=NETREACT_DOWN_SCRIPT='/abs/path/to/toDownScript'
+Environment=SKIP_FIRST_NEW_ADDRESS='1'
 ExecStart=/usr/local/bin/netreactd
 
 [Install]
