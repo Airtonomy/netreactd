@@ -69,7 +69,7 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
     bool volatile threadActive = false;
 
     // skip first address assignment if the environment says so
-    skipFirstNewAddressFlag = !strIsEmpty(skipFirstNewAddress) && skipFirstNewAddress[0] == '1';
+    bool skipFirstNewAddressFlag = !strIsEmpty(skipFirstNewAddress) && skipFirstNewAddress[0] == '1';
     
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
