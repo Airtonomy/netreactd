@@ -133,8 +133,6 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
         // message parser
         struct nlmsghdr const *h;
 
-        bool newLinkScriptSuccess = false;
-
         for (h = (struct nlmsghdr const*)buf; status >= (ssize_t)sizeof(*h); ) {   // read all messagess headers
             int const len = h->nlmsg_len;
             int const l = len - sizeof(*h);
@@ -203,7 +201,6 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
                                 int const returnCode = system(newLinkScript);
                                 printf("Script finished with code %d\n", returnCode);
                                 if (returnCode == 0) {
-                                    newLinkScriptSuccess = true
                                     break;
                                 }
                             }
