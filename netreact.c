@@ -69,8 +69,9 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
     bool volatile threadActive = false;
 
     // skip first address assignment if the environment says so
-    bool skipFirstNewAddressFlag = !strIsEmpty(skipFirstNewAddress) && skipFirstNewAddress[0] == '1';
-    
+    bool const skipFirstNewAddressSchemeActive = !strIsEmpty(skipFirstNewAddress) && skipFirstNewAddress[0] == '1';
+    bool skipFirstNewAddressFlag = skipFirstNewAddressSchemeActive;
+
     config_t const threadConfig = {
         .timeoutSeconds = timeoutSeconds,
         .script = upScript,
@@ -195,6 +196,9 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
+                        
+                        // for each new link reset the skipFirstNewAddressFlag if the schem is active
+                        skipFirstNewAddressFlag = skipFirstNewAddressSchemeActive;
                         
                         isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
