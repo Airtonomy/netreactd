@@ -191,18 +191,23 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_DELLINK:
                         printf("Network interface %s was removed\n", ifName);
-                        isDown = true;
-                        break;
+			            // only set is down if target interface
+                        if (strcmp(ifName, ifTarget) == 0){
+                            printf("Network interface %s set isDown\n", ifName);
+                            isDown = true;
+                            break;
+			            }
 
                     case RTM_NEWLINK:
                         printf("New network interface %s, state: %s %s\n", ifName, ifUpp, ifRunn);
                         
-                        // for each new link reset the skipFirstNewAddressFlag if the schem is active
-                        skipFirstNewAddressFlag = skipFirstNewAddressSchemeActive;
-                        
                         isDown = !isUp || !isRunning;
                         if (!threadActive && isUp && isRunning && strcmp(ifName, ifTarget) == 0) {
-                            // if there is a newLinkScript run and break on success
+                            // for each new link reset the skipFirstNewAddressFlag if the schem is active
+                            printf("Reset skip flag for new connection while script is not running.\n");
+                            skipFirstNewAddressFlag = skipFirstNewAddressSchemeActive;
+                            
+			    // if there is a newLinkScript run and break on success
                             if (!strIsEmpty(newLinkScript)) {
                                 printf("Running NEWLINK_SCRIPT script\n");
                                 int const returnCode = system(newLinkScript);
@@ -225,7 +230,7 @@ static int main_loop(char const *const ifTarget, size_t const timeoutSeconds, ch
 
                     case RTM_NEWADDR:
                         printf("Interface %s: new address was assigned: %s\n", ifName, ifAddress);
-                        if (skipFirstNewAddressFlag) {
+                        if (threadActive && strcmp(ifName, ifTarget) == 0 && skipFirstNewAddressFlag) {
                             printf("Skipping handling of new address.\n");
                             skipFirstNewAddressFlag = false;
                             break;
